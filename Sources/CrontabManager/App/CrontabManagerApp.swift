@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct CrontabManagerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = CrontabStore()
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some Scene {
         WindowGroup("Crontab Manager") {
@@ -30,6 +31,23 @@ struct CrontabManagerApp: App {
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(store.selectedJob == nil)
+
+                Divider()
+
+                Button("Increase Text Size") {
+                    appTextFontSize = AppTextSizing.increased(from: appTextFontSize)
+                }
+                .keyboardShortcut("+", modifiers: [.command])
+
+                Button("Decrease Text Size") {
+                    appTextFontSize = AppTextSizing.decreased(from: appTextFontSize)
+                }
+                .keyboardShortcut("-", modifiers: [.command])
+
+                Button("Reset Text Size") {
+                    appTextFontSize = AppTextSizing.defaultSize
+                }
+                .keyboardShortcut("0", modifiers: [.command])
             }
         }
     }

@@ -129,13 +129,15 @@ struct ContentView: View {
 }
 
 private struct EmptyStateView: View {
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
+
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "calendar.badge.clock")
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)
             Text("No Scheduled Items")
-                .font(.title2.weight(.semibold))
+                .font(AppTextSizing.title3(appTextFontSize, weight: .semibold))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

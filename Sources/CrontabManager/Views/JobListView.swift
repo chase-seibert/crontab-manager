@@ -2,12 +2,13 @@ import SwiftUI
 
 struct JobListView: View {
     @ObservedObject var store: CrontabStore
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Text("Crontab")
-                    .font(.headline)
+                    .font(AppTextSizing.subheadline(appTextFontSize, weight: .semibold))
 
                 Spacer()
 
@@ -36,7 +37,8 @@ struct JobListView: View {
                         job: job,
                         status: store.statuses[job.id],
                         isStatusLoading: store.statusLoadingJobIDs.contains(job.id),
-                        isRunning: store.runningJobIDs.contains(job.id)
+                        isRunning: store.runningJobIDs.contains(job.id),
+                        appTextFontSize: appTextFontSize
                     )
                     .tag(job.id)
                     .contextMenu {
@@ -73,6 +75,7 @@ private struct JobRow: View {
     var status: JobStatus?
     var isStatusLoading: Bool
     var isRunning: Bool
+    var appTextFontSize: Double
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -85,7 +88,7 @@ private struct JobRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(job.title)
-                        .font(.body.weight(.semibold))
+                        .font(AppTextSizing.body(appTextFontSize, weight: .medium))
                         .lineLimit(1)
 
                     if isRunning || isStatusLoading {
@@ -94,56 +97,43 @@ private struct JobRow: View {
                     }
                 }
 
-                Text(job.scheduleDescription)
-                    .font(.caption)
+                Text(sidebarDetailText)
+                    .font(AppTextSizing.caption(appTextFontSize))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
-            Spacer(minLength: 16)
-
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(errorText)
-                    .font(.caption2)
-                    .foregroundStyle(errorColor)
-                    .lineLimit(1)
-
-                Text(lastSuccessText)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
     }
 
-    private var lastSuccessText: String {
-        if isStatusLoading, status == nil {
-            return "Checking logs..."
-        }
-
-        guard let date = status?.lastSuccessfulRun else { return "Last success -" }
-        return "Last success \(DisplayFormatters.relativeString(for: date))"
+    private var sidebarDetailText: String {
+        "\(statusSummary) - \(job.scheduleDescription)"
     }
 
-    private var errorText: String {
+    private var statusSummary: String {
+        if isRunning {
+            return "Running"
+        }
+
         if isStatusLoading, status == nil {
-            return "Checking errors..."
+            return "Checking status"
         }
 
         if status?.hasRecentError == true {
             return "Recent error"
         }
 
+        if let date = status?.lastSuccessfulRun {
+            return "Last success \(DisplayFormatters.relativeString(for: date))"
+        }
+
         if let note = status?.note {
             return note
         }
 
-        return isStatusLoading ? "Refreshing status..." : "No recent errors"
-    }
-
-    private var errorColor: Color {
-        status?.hasRecentError == true ? .red : .secondary
+        return isStatusLoading ? "Refreshing status" : "Status pending"
     }
 
     private var statusIconName: String {
@@ -160,7 +150,7 @@ private struct JobRow: View {
 
     private var statusIconColor: Color {
         if !job.isEnabled {
-            return .yellow
+            return .orange
         }
 
         guard let status, didRunRecently(status) else {

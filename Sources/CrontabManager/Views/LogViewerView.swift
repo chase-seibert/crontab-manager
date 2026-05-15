@@ -4,10 +4,14 @@ import SwiftUI
 struct LogFilesView: View {
     var logPaths: [String]
     var didClearLog: () -> Void = {}
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
-        GroupBox("Log Files") {
+        GroupBox {
             LogFilesInlineView(logPaths: logPaths, didClearLog: didClearLog)
+        } label: {
+            Text("Log Files")
+                .font(AppTextSizing.caption(appTextFontSize, weight: .semibold))
         }
     }
 }
@@ -16,10 +20,12 @@ struct LogFilesInlineView: View {
     var logPaths: [String]
     var isEmbeddedInDetailRow = false
     var didClearLog: () -> Void = {}
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
         if logPaths.isEmpty {
             Text("No log file redirection")
+                .font(AppTextSizing.body(appTextFontSize))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, isEmbeddedInDetailRow ? 0 : 4)
@@ -41,6 +47,7 @@ struct LogFileRow: View {
     @State private var isClearing = false
     @State private var clearError: String?
     @State private var openError: String?
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
         HStack(spacing: 10) {
@@ -50,12 +57,12 @@ struct LogFileRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(fileName)
-                    .font(.body)
+                    .font(AppTextSizing.body(appTextFontSize, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
 
                 Text(resolvedPath)
-                    .font(.caption)
+                    .font(AppTextSizing.caption(appTextFontSize))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -67,14 +74,18 @@ struct LogFileRow: View {
                 isConfirmingClear = true
             } label: {
                 Label("Clear", systemImage: "trash")
+                    .font(AppTextSizing.body(appTextFontSize))
             }
+            .controlSize(.small)
             .disabled(isClearing)
 
             Button {
                 openExternally()
             } label: {
                 Label("Open", systemImage: "arrow.up.right.square")
+                    .font(AppTextSizing.body(appTextFontSize))
             }
+            .controlSize(.small)
         }
         .confirmationDialog(
             "Clear this log file?",

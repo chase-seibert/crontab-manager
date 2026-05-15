@@ -6,6 +6,7 @@ struct JobDetailView: View {
     var job: CronJob
     @State private var isConfirmingDelete = false
     @State private var isErrorPreviewExpanded = false
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
         ScrollView {
@@ -16,8 +17,8 @@ struct JobDetailView: View {
                 manualRunPanel
                 deletePanel
             }
-            .padding(20)
-            .frame(maxWidth: 920, alignment: .leading)
+            .padding(24)
+            .frame(maxWidth: 760, alignment: .leading)
         }
         .navigationTitle(job.title)
         .confirmationDialog(
@@ -36,32 +37,47 @@ struct JobDetailView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(job.title)
-                    .font(.title2.weight(.semibold))
-                    .lineLimit(1)
+                    .font(AppTextSizing.title3(appTextFontSize, weight: .semibold))
+                    .lineLimit(2)
 
                 Text(job.rawLine)
-                    .font(.caption.monospaced())
+                    .font(AppTextSizing.caption(appTextFontSize, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .textSelection(.enabled)
             }
 
             Spacer()
+
+            runNowButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var runNowButton: some View {
+        Button {
+            Task { await store.runNow(jobID: job.id) }
+        } label: {
+            Label(store.runningJobIDs.contains(job.id) ? "Running" : "Run Now", systemImage: "play.fill")
+                .font(AppTextSizing.body(appTextFontSize))
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.regular)
+        .disabled(store.runningJobIDs.contains(job.id))
+        .help("Run this job in Terminal")
+    }
+
     private var jobSummary: some View {
-        GroupBox("Job") {
+        GroupBox {
             VStack(spacing: 0) {
                 DetailRow("Schedule") {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(job.scheduleDescription)
                         Text(job.scheduleExpression)
-                            .font(.caption.monospaced())
+                            .font(AppTextSizing.caption(appTextFontSize, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -89,18 +105,26 @@ struct JobDetailView: View {
                 }
             }
             .padding(.vertical, 2)
+        } label: {
+            Text("Job")
+                .font(AppTextSizing.caption(appTextFontSize, weight: .semibold))
         }
     }
 
     private var commandRow: some View {
         HStack(alignment: .top, spacing: 8) {
             Text(commandText)
-                .font(.system(.body, design: .monospaced))
+                .font(commandTextFont)
                 .textSelection(.enabled)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(7)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
+                }
 
             Button {
                 copyCommand()
@@ -108,6 +132,7 @@ struct JobDetailView: View {
                 Label("Copy Command", systemImage: "doc.on.doc")
             }
             .labelStyle(.iconOnly)
+            .controlSize(.small)
             .help("Copy command")
         }
     }
@@ -116,7 +141,7 @@ struct JobDetailView: View {
         let status = store.statuses[job.id]
         let isLoading = store.statusLoadingJobIDs.contains(job.id)
 
-        return GroupBox("Status") {
+        return GroupBox {
             VStack(spacing: 0) {
                 StatusLine(systemImage: "clock", title: lastSuccessText(status)) {
                     if isLoading {
@@ -144,12 +169,12 @@ struct JobDetailView: View {
                     DisclosureGroup(isExpanded: $isErrorPreviewExpanded) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(excerpt.text)
-                                .font(.caption.monospaced())
+                                .font(commandTextFont)
                                 .textSelection(.enabled)
                                 .lineLimit(24)
 
                             Text("\(excerpt.filePath), line \(excerpt.startLineNumber)")
-                                .font(.caption2)
+                                .font(AppTextSizing.caption2(appTextFontSize))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
@@ -157,8 +182,9 @@ struct JobDetailView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Error Preview")
+                                .font(AppTextSizing.body(appTextFontSize))
                             Text(excerpt.text)
-                                .font(.caption.monospaced())
+                                .font(commandTextFont)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -168,35 +194,33 @@ struct JobDetailView: View {
                 }
             }
             .padding(.vertical, 2)
+        } label: {
+            Text("Status")
+                .font(AppTextSizing.caption(appTextFontSize, weight: .semibold))
         }
     }
 
     private var manualRunPanel: some View {
-        GroupBox("Manual Run") {
+        GroupBox {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Spacer()
-
-                    Button {
-                        Task { await store.runNow(jobID: job.id) }
-                    } label: {
-                        Label("Run Now", systemImage: "play.fill")
-                    }
-                    .disabled(store.runningJobIDs.contains(job.id))
-                }
-
                 manualRunContent
             }
+            .font(AppTextSizing.body(appTextFontSize))
             .padding(.vertical, 4)
+        } label: {
+            Text("Manual Run")
+                .font(AppTextSizing.caption(appTextFontSize, weight: .semibold))
         }
     }
 
     @ViewBuilder
     private var manualRunContent: some View {
         if store.runningJobIDs.contains(job.id) {
-            HStack {
+            HStack(spacing: 8) {
                 ProgressView()
-                Text("Running")
+                    .controlSize(.small)
+                Text("Opening in Terminal")
+                    .foregroundStyle(.secondary)
             }
         } else if let result = store.runResults[job.id] {
             VStack(alignment: .leading, spacing: 8) {
@@ -209,7 +233,7 @@ struct JobDetailView: View {
                 }
 
                 Text("Launched \(DisplayFormatters.dateTime.string(from: result.launchedAt)) without cron log redirection")
-                    .font(.caption)
+                    .font(AppTextSizing.caption(appTextFontSize))
                     .foregroundStyle(.secondary)
 
                 OutputSnippet(title: "terminal command", text: result.command)
@@ -224,10 +248,11 @@ struct JobDetailView: View {
         HStack {
             Spacer()
 
-            Button {
+            Button(role: .destructive) {
                 isConfirmingDelete = true
             } label: {
                 Label("Delete Job", systemImage: "trash")
+                    .font(AppTextSizing.body(appTextFontSize))
                     .foregroundStyle(.red)
             }
             .buttonStyle(.bordered)
@@ -267,11 +292,16 @@ struct JobDetailView: View {
         guard let status else { return "Status pending" }
         return status.hasRecentError ? "Recent error" : "No recent errors"
     }
+
+    private var commandTextFont: Font {
+        AppTextSizing.code(appTextFontSize)
+    }
 }
 
 private struct DetailRow<Content: View>: View {
     var title: String
     var content: Content
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     init(_ title: String, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -279,12 +309,14 @@ private struct DetailRow<Content: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: DetailLayout.rowHorizontalSpacing) {
             Text(title)
+                .font(AppTextSizing.body(appTextFontSize))
                 .foregroundStyle(.secondary)
-                .frame(width: 82, alignment: .leading)
+                .frame(width: DetailLayout.labelColumnWidth, alignment: .leading)
 
             content
+                .font(AppTextSizing.body(appTextFontSize))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 8)
@@ -296,6 +328,7 @@ private struct StatusLine<Trailing: View>: View {
     var title: String
     var tint: Color
     var trailing: Trailing
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     init(
         systemImage: String,
@@ -316,6 +349,7 @@ private struct StatusLine<Trailing: View>: View {
                 .frame(width: 16)
 
             Text(title)
+                .font(AppTextSizing.body(appTextFontSize))
                 .lineLimit(1)
 
             Spacer()
@@ -327,7 +361,7 @@ private struct StatusLine<Trailing: View>: View {
 }
 
 private struct DetailDivider: View {
-    var leadingInset: CGFloat = 94
+    var leadingInset: CGFloat = DetailLayout.dividerLeadingInset
 
     var body: some View {
         Divider()
@@ -335,22 +369,33 @@ private struct DetailDivider: View {
     }
 }
 
+private enum DetailLayout {
+    static let labelColumnWidth: CGFloat = 88
+    static let rowHorizontalSpacing: CGFloat = 14
+    static let dividerLeadingInset = labelColumnWidth + rowHorizontalSpacing
+}
+
 private struct OutputSnippet: View {
     var title: String
     var text: String
+    @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(AppTextSizing.caption(appTextFontSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text(text)
-                .font(.caption.monospaced())
+                .font(AppTextSizing.code(appTextFontSize))
                 .textSelection(.enabled)
                 .lineLimit(8)
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
+                }
         }
     }
 }
