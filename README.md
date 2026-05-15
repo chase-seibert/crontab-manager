@@ -1,5 +1,7 @@
 # Crontab Manager
 
+![Crontab Manager app screenshot](Resources/CrontabManagerScreenshot.jpeg)
+
 A small macOS app for viewing and managing the current user's crontab.
 
 The app intentionally treats `crontab -l` as the only source of truth for scheduled jobs. It does not maintain a separate job database. For run context and status, it reads the log files referenced by each cron command.
