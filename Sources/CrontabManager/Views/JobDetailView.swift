@@ -5,22 +5,21 @@ struct JobDetailView: View {
     @ObservedObject var store: CrontabStore
     var job: CronJob
     @State private var isConfirmingDelete = false
-    @State private var isErrorPreviewExpanded = false
+    @State private var isErrorPreviewExpanded = true
     @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 16) {
                 header
-                jobSummary
+                jobFields
                 statusPanel
                 manualRunPanel
                 deletePanel
             }
             .padding(24)
-            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: 620, alignment: .leading)
         }
-        .navigationTitle(job.title)
         .confirmationDialog(
             "Delete this job?",
             isPresented: $isConfirmingDelete,
@@ -37,22 +36,15 @@ struct JobDetailView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(job.title)
-                    .font(AppTextSizing.title3(appTextFontSize, weight: .semibold))
-                    .lineLimit(2)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(job.title)
+                .font(AppTextSizing.title3(appTextFontSize, weight: .semibold))
+                .lineLimit(2)
 
-                Text(job.rawLine)
-                    .font(AppTextSizing.caption(appTextFontSize, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .textSelection(.enabled)
-            }
-
-            Spacer()
-
-            runNowButton
+            Text(headerSubtitle)
+                .font(AppTextSizing.caption(appTextFontSize))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -64,50 +56,45 @@ struct JobDetailView: View {
             Label(store.runningJobIDs.contains(job.id) ? "Running" : "Run Now", systemImage: "play.fill")
                 .font(AppTextSizing.body(appTextFontSize))
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.regular)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
         .disabled(store.runningJobIDs.contains(job.id))
         .help("Run this job in Terminal")
     }
 
-    private var jobSummary: some View {
-        GroupBox {
-            VStack(spacing: 0) {
-                DetailRow("Schedule") {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(job.scheduleDescription)
-                        Text(job.scheduleExpression)
-                            .font(AppTextSizing.caption(appTextFontSize, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                }
+    private var jobFields: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            DetailField("Job") {
+                Text(job.title)
+                    .font(AppTextSizing.body(appTextFontSize))
+                    .lineLimit(2)
+            }
 
-                DetailDivider()
-
-                DetailRow("Enabled") {
-                    Toggle("Enabled", isOn: enabledBinding)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-
-                DetailDivider()
-
-                DetailRow("Command") {
-                    commandRow
-                }
-
-                DetailDivider()
-
-                DetailRow("Log Files") {
-                    LogFilesInlineView(logPaths: job.logPaths, isEmbeddedInDetailRow: true) {
-                        Task { await store.refresh() }
-                    }
+            DetailField("Schedule") {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(job.scheduleDescription)
+                        .font(AppTextSizing.body(appTextFontSize))
+                    Text(job.scheduleExpression)
+                        .font(AppTextSizing.caption(appTextFontSize, design: .monospaced))
+                        .foregroundStyle(.secondary)
                 }
             }
-            .padding(.vertical, 2)
-        } label: {
-            Text("Job")
-                .font(AppTextSizing.caption(appTextFontSize, weight: .semibold))
+
+            DetailField("Enabled") {
+                Toggle("Enabled", isOn: enabledBinding)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+
+            DetailField("Command") {
+                commandRow
+            }
+
+            DetailField("Log Files") {
+                LogFilesInlineView(logPaths: job.logPaths, isEmbeddedInDetailRow: true) {
+                    Task { await store.refresh() }
+                }
+            }
         }
     }
 
@@ -141,35 +128,24 @@ struct JobDetailView: View {
         let status = store.statuses[job.id]
         let isLoading = store.statusLoadingJobIDs.contains(job.id)
 
-        return GroupBox {
-            VStack(spacing: 0) {
-                StatusLine(systemImage: "clock", title: lastSuccessText(status)) {
-                    if isLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
+        return DetailField("Status") {
+            VStack(alignment: .leading, spacing: 9) {
+                StatusBulletLine(title: lastSuccessText(status), tint: .secondary) {
+                    if isLoading { ProgressView().controlSize(.small) }
                 }
 
-                DetailDivider(leadingInset: 0)
-
-                StatusLine(
-                    systemImage: status?.hasRecentError == true ? "exclamationmark.triangle.fill" : "checkmark.seal",
+                StatusBulletLine(
                     title: errorSummary(status),
                     tint: status?.hasRecentError == true ? .red : .secondary
                 ) {
-                    if isLoading, status != nil {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
+                    if isLoading, status != nil { ProgressView().controlSize(.small) }
                 }
 
                 if let excerpt = status?.recentErrorExcerpt {
-                    DetailDivider(leadingInset: 0)
-
                     DisclosureGroup(isExpanded: $isErrorPreviewExpanded) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(excerpt.text)
-                                .font(commandTextFont)
+                                .font(errorPreviewFont)
                                 .textSelection(.enabled)
                                 .lineLimit(24)
 
@@ -180,36 +156,28 @@ struct JobDetailView: View {
                         }
                         .padding(.top, 8)
                     } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Error Preview")
-                                .font(AppTextSizing.body(appTextFontSize))
-                            Text(excerpt.text)
-                                .font(commandTextFont)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
+                        Text("Error Preview")
+                            .font(AppTextSizing.body(appTextFontSize))
                     }
-                    .padding(.vertical, 8)
                 }
             }
-            .padding(.vertical, 2)
-        } label: {
-            Text("Status")
-                .font(AppTextSizing.caption(appTextFontSize, weight: .semibold))
         }
     }
 
     private var manualRunPanel: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+        DetailField("Manual Run") {
+            HStack(alignment: .top, spacing: 16) {
                 manualRunContent
+
+                Spacer(minLength: 12)
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    runNowButton
+                    Text("Manual run")
+                        .font(AppTextSizing.caption(appTextFontSize))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .font(AppTextSizing.body(appTextFontSize))
-            .padding(.vertical, 4)
-        } label: {
-            Text("Manual Run")
-                .font(AppTextSizing.caption(appTextFontSize, weight: .semibold))
         }
     }
 
@@ -224,12 +192,9 @@ struct JobDetailView: View {
             }
         } else if let result = store.runResults[job.id] {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                HStack(spacing: 8) {
                     Label("Opened in Terminal", systemImage: "terminal")
                         .foregroundStyle(.green)
-                    Spacer()
-                    Text("Manual run")
-                        .foregroundStyle(.secondary)
                 }
 
                 Text("Launched \(DisplayFormatters.dateTime.string(from: result.launchedAt)) without cron log redirection")
@@ -268,6 +233,18 @@ struct JobDetailView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var headerSubtitle: String {
+        "\(lastRunSummary) - \(job.isEnabled ? "Enabled" : "Disabled")"
+    }
+
+    private var lastRunSummary: String {
+        guard let status = store.statuses[job.id], let date = status.lastSuccessfulRun else {
+            return "Last run unavailable"
+        }
+
+        return "Last run \(DisplayFormatters.relativeString(for: date))"
+    }
+
     private func copyCommand() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -296,57 +273,59 @@ struct JobDetailView: View {
     private var commandTextFont: Font {
         AppTextSizing.code(appTextFontSize)
     }
+
+    private var errorPreviewFont: Font {
+        AppTextSizing.caption(appTextFontSize, design: .monospaced)
+    }
 }
 
-private struct DetailRow<Content: View>: View {
-    var title: String
+private struct DetailField<Content: View>: View {
+    var label: String
     var content: Content
     @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
-    init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
+    init(_ label: String, @ViewBuilder content: () -> Content) {
+        self.label = label
         self.content = content()
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: DetailLayout.rowHorizontalSpacing) {
-            Text(title)
-                .font(AppTextSizing.body(appTextFontSize))
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label.uppercased())
+                .font(AppTextSizing.caption(appTextFontSize))
                 .foregroundStyle(.secondary)
-                .frame(width: DetailLayout.labelColumnWidth, alignment: .leading)
+                .lineLimit(1)
 
             content
                 .font(AppTextSizing.body(appTextFontSize))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private struct StatusLine<Trailing: View>: View {
-    var systemImage: String
+private struct StatusBulletLine<Trailing: View>: View {
     var title: String
     var tint: Color
     var trailing: Trailing
     @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     init(
-        systemImage: String,
         title: String,
         tint: Color = .secondary,
         @ViewBuilder trailing: () -> Trailing
     ) {
-        self.systemImage = systemImage
         self.title = title
         self.tint = tint
         self.trailing = trailing()
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: systemImage)
+        HStack(spacing: 8) {
+            Image(systemName: "circle.fill")
+                .font(.system(size: 6))
                 .foregroundStyle(tint)
-                .frame(width: 16)
+                .frame(width: 10)
 
             Text(title)
                 .font(AppTextSizing.body(appTextFontSize))
@@ -356,23 +335,7 @@ private struct StatusLine<Trailing: View>: View {
 
             trailing
         }
-        .padding(.vertical, 8)
     }
-}
-
-private struct DetailDivider: View {
-    var leadingInset: CGFloat = DetailLayout.dividerLeadingInset
-
-    var body: some View {
-        Divider()
-            .padding(.leading, leadingInset)
-    }
-}
-
-private enum DetailLayout {
-    static let labelColumnWidth: CGFloat = 88
-    static let rowHorizontalSpacing: CGFloat = 14
-    static let dividerLeadingInset = labelColumnWidth + rowHorizontalSpacing
 }
 
 private struct OutputSnippet: View {

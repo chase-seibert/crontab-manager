@@ -50,25 +50,19 @@ struct LogFileRow: View {
     @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(fileName)
-                    .font(AppTextSizing.body(appTextFontSize, weight: .medium))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                Text(resolvedPath)
-                    .font(AppTextSizing.caption(appTextFontSize))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Spacer(minLength: 12)
+        HStack(spacing: 8) {
+            Text(resolvedPath)
+                .font(AppTextSizing.code(appTextFontSize))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
+                }
 
             Button(role: .destructive) {
                 isConfirmingClear = true
@@ -86,6 +80,7 @@ struct LogFileRow: View {
                     .font(AppTextSizing.body(appTextFontSize))
             }
             .controlSize(.small)
+            .buttonStyle(.borderedProminent)
         }
         .confirmationDialog(
             "Clear this log file?",
@@ -118,10 +113,6 @@ struct LogFileRow: View {
 
     private var resolvedPath: String {
         PathResolver.resolve(path)
-    }
-
-    private var fileName: String {
-        URL(fileURLWithPath: resolvedPath).lastPathComponent
     }
 
     private var clearErrorBinding: Binding<Bool> {

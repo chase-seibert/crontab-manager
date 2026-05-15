@@ -5,61 +5,33 @@ struct JobListView: View {
     @AppStorage(AppTextSizing.storageKey) private var appTextFontSize = AppTextSizing.defaultSize
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text("Crontab")
-                    .font(AppTextSizing.subheadline(appTextFontSize, weight: .semibold))
+        List(selection: selectionBinding) {
+            ForEach(store.jobs) { job in
+                JobRow(
+                    job: job,
+                    status: store.statuses[job.id],
+                    isStatusLoading: store.statusLoadingJobIDs.contains(job.id),
+                    isRunning: store.runningJobIDs.contains(job.id),
+                    appTextFontSize: appTextFontSize
+                )
+                .tag(job.id)
+                .contextMenu {
+                    Button("Run Now") {
+                        Task { await store.runNow(jobID: job.id) }
+                    }
 
-                Spacer()
-
-                if store.isLoading && !store.jobs.isEmpty {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
-                Button {
-                    Task { await store.refresh() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .labelStyle(.iconOnly)
-                .help("Refresh crontab")
-                .disabled(store.isLoading)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
-            Divider()
-
-            List(selection: selectionBinding) {
-                ForEach(store.jobs) { job in
-                    JobRow(
-                        job: job,
-                        status: store.statuses[job.id],
-                        isStatusLoading: store.statusLoadingJobIDs.contains(job.id),
-                        isRunning: store.runningJobIDs.contains(job.id),
-                        appTextFontSize: appTextFontSize
-                    )
-                    .tag(job.id)
-                    .contextMenu {
-                        Button("Run Now") {
-                            Task { await store.runNow(jobID: job.id) }
-                        }
-
-                        Button(job.isEnabled ? "Disable" : "Enable") {
-                            Task { await store.setEnabled(jobID: job.id, enabled: !job.isEnabled) }
-                        }
+                    Button(job.isEnabled ? "Disable" : "Enable") {
+                        Task { await store.setEnabled(jobID: job.id, enabled: !job.isEnabled) }
                     }
                 }
             }
-            .overlay {
-                if store.isLoading && store.jobs.isEmpty {
-                    ProgressView()
-                }
-            }
-            .listStyle(.sidebar)
         }
-        .navigationTitle("Crontab")
+        .overlay {
+            if store.isLoading && store.jobs.isEmpty {
+                ProgressView()
+            }
+        }
+        .listStyle(.sidebar)
     }
 
     private var selectionBinding: Binding<CronJob.ID?> {

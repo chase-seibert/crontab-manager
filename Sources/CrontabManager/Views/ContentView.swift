@@ -43,12 +43,22 @@ struct ContentView: View {
             await store.refresh()
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    Task { await store.refresh() }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .labelStyle(.iconOnly)
+                .help("Refresh crontab")
+                .disabled(store.isLoading)
+
                 Button {
                     toggleDetailPane()
                 } label: {
                     Label(isDetailPaneVisible ? "Hide Details" : "Show Details", systemImage: "sidebar.right")
                 }
+                .labelStyle(.iconOnly)
                 .help(isDetailPaneVisible ? "Hide details pane" : "Show details pane")
             }
         }
@@ -199,6 +209,7 @@ private struct WindowAccessor: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             handle.window = window
+            window?.title = "Crontab Manager"
         }
     }
 }
