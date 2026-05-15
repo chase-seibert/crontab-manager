@@ -1,6 +1,6 @@
 # Crontab Manager
 
-![Crontab Manager app screenshot](Resources/CrontabManagerScreenshot.jpeg)
+![Crontab Manager app screenshot](Resources/CrontabManagerScreenshot.png)
 
 A small macOS app for viewing and managing the current user's crontab.
 
