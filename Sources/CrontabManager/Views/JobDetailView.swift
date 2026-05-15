@@ -5,10 +5,11 @@ struct JobDetailView: View {
     @ObservedObject var store: CrontabStore
     var job: CronJob
     @State private var isConfirmingDelete = false
+    @State private var isErrorPreviewExpanded = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 18) {
                 header
                 jobSummary
                 statusPanel
@@ -38,7 +39,7 @@ struct JobDetailView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(job.title)
-                    .font(.largeTitle.weight(.semibold))
+                    .font(.title2.weight(.semibold))
                     .lineLimit(1)
 
                 Text(job.rawLine)
@@ -55,10 +56,8 @@ struct JobDetailView: View {
 
     private var jobSummary: some View {
         GroupBox("Job") {
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 12) {
-                GridRow {
-                    Text("Schedule")
-                        .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                DetailRow("Schedule") {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(job.scheduleDescription)
                         Text(job.scheduleExpression)
@@ -67,48 +66,49 @@ struct JobDetailView: View {
                     }
                 }
 
-                GridRow {
-                    Text("Enabled")
-                        .foregroundStyle(.secondary)
+                DetailDivider()
 
+                DetailRow("Enabled") {
                     Toggle("Enabled", isOn: enabledBinding)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
 
-                GridRow {
-                    Text("Command")
-                        .foregroundStyle(.secondary)
+                DetailDivider()
 
-                    HStack(alignment: .top, spacing: 8) {
-                        Text(commandText)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .lineLimit(4)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-
-                        Button {
-                            copyCommand()
-                        } label: {
-                            Label("Copy Command", systemImage: "doc.on.doc")
-                        }
-                        .labelStyle(.iconOnly)
-                        .help("Copy command")
-                    }
+                DetailRow("Command") {
+                    commandRow
                 }
 
-                GridRow {
-                    Text("Log Files")
-                        .foregroundStyle(.secondary)
+                DetailDivider()
 
-                    LogFilesInlineView(logPaths: job.logPaths) {
+                DetailRow("Log Files") {
+                    LogFilesInlineView(logPaths: job.logPaths, isEmbeddedInDetailRow: true) {
                         Task { await store.refresh() }
                     }
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
+        }
+    }
+
+    private var commandRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(commandText)
+                .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(7)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+
+            Button {
+                copyCommand()
+            } label: {
+                Label("Copy Command", systemImage: "doc.on.doc")
+            }
+            .labelStyle(.iconOnly)
+            .help("Copy command")
         }
     }
 
@@ -117,50 +117,57 @@ struct JobDetailView: View {
         let isLoading = store.statusLoadingJobIDs.contains(job.id)
 
         return GroupBox("Status") {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    if isLoading, status == nil {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Checking log files")
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        Label(lastSuccessText(status), systemImage: "clock")
+            VStack(spacing: 0) {
+                StatusLine(systemImage: "clock", title: lastSuccessText(status)) {
+                    if isLoading {
+                        ProgressView()
+                            .controlSize(.small)
                     }
+                }
 
-                    Spacer()
+                DetailDivider(leadingInset: 0)
 
+                StatusLine(
+                    systemImage: status?.hasRecentError == true ? "exclamationmark.triangle.fill" : "checkmark.seal",
+                    title: errorSummary(status),
+                    tint: status?.hasRecentError == true ? .red : .secondary
+                ) {
                     if isLoading, status != nil {
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Refreshing")
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        Label(errorSummary(status), systemImage: status?.hasRecentError == true ? "exclamationmark.triangle.fill" : "checkmark.seal")
-                            .foregroundStyle(status?.hasRecentError == true ? .red : .secondary)
+                        ProgressView()
+                            .controlSize(.small)
                     }
                 }
 
                 if let excerpt = status?.recentErrorExcerpt {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(excerpt.text)
-                            .font(.caption.monospaced())
-                            .textSelection(.enabled)
-                            .lineLimit(24)
+                    DetailDivider(leadingInset: 0)
 
-                        Text("\(excerpt.filePath), line \(excerpt.startLineNumber)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    DisclosureGroup(isExpanded: $isErrorPreviewExpanded) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(excerpt.text)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                                .lineLimit(24)
+
+                            Text("\(excerpt.filePath), line \(excerpt.startLineNumber)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .padding(.top, 8)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Error Preview")
+                            Text(excerpt.text)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
+                    .padding(.vertical, 8)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
         }
     }
 
@@ -259,6 +266,72 @@ struct JobDetailView: View {
     private func errorSummary(_ status: JobStatus?) -> String {
         guard let status else { return "Status pending" }
         return status.hasRecentError ? "Recent error" : "No recent errors"
+    }
+}
+
+private struct DetailRow<Content: View>: View {
+    var title: String
+    var content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(title)
+                .foregroundStyle(.secondary)
+                .frame(width: 82, alignment: .leading)
+
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+private struct StatusLine<Trailing: View>: View {
+    var systemImage: String
+    var title: String
+    var tint: Color
+    var trailing: Trailing
+
+    init(
+        systemImage: String,
+        title: String,
+        tint: Color = .secondary,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.systemImage = systemImage
+        self.title = title
+        self.tint = tint
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+                .frame(width: 16)
+
+            Text(title)
+                .lineLimit(1)
+
+            Spacer()
+
+            trailing
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+private struct DetailDivider: View {
+    var leadingInset: CGFloat = 94
+
+    var body: some View {
+        Divider()
+            .padding(.leading, leadingInset)
     }
 }
 

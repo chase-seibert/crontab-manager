@@ -14,6 +14,7 @@ struct LogFilesView: View {
 
 struct LogFilesInlineView: View {
     var logPaths: [String]
+    var isEmbeddedInDetailRow = false
     var didClearLog: () -> Void = {}
 
     var body: some View {
@@ -21,14 +22,14 @@ struct LogFilesInlineView: View {
             Text("No log file redirection")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
+                .padding(.vertical, isEmbeddedInDetailRow ? 0 : 4)
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(logPaths, id: \.self) { path in
                     LogFileRow(path: path, didClearLog: didClearLog)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, isEmbeddedInDetailRow ? 0 : 4)
         }
     }
 }
@@ -48,8 +49,8 @@ struct LogFileRow: View {
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(path)
-                    .font(.system(.body, design: .monospaced))
+                Text(fileName)
+                    .font(.body)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
@@ -106,6 +107,10 @@ struct LogFileRow: View {
 
     private var resolvedPath: String {
         PathResolver.resolve(path)
+    }
+
+    private var fileName: String {
+        URL(fileURLWithPath: resolvedPath).lastPathComponent
     }
 
     private var clearErrorBinding: Binding<Bool> {

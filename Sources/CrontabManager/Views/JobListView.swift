@@ -6,7 +6,7 @@ struct JobListView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Scheduled Items")
+                Text("Crontab")
                     .font(.headline)
 
                 Spacer()
@@ -55,6 +55,7 @@ struct JobListView: View {
                     ProgressView()
                 }
             }
+            .listStyle(.sidebar)
         }
         .navigationTitle("Crontab")
     }
@@ -84,7 +85,7 @@ private struct JobRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(job.title)
-                        .font(.headline)
+                        .font(.body.weight(.semibold))
                         .lineLimit(1)
 
                     if isRunning || isStatusLoading {
@@ -102,18 +103,18 @@ private struct JobRow: View {
             Spacer(minLength: 16)
 
             VStack(alignment: .trailing, spacing: 3) {
-                Text(lastSuccessText)
-                    .font(.caption)
-                    .foregroundStyle(status?.lastSuccessfulRun == nil ? .secondary : .primary)
+                Text(errorText)
+                    .font(.caption2)
+                    .foregroundStyle(errorColor)
                     .lineLimit(1)
 
-                Text(errorText)
-                    .font(.caption)
-                    .foregroundStyle(status?.hasRecentError == true ? .red : .secondary)
+                Text(lastSuccessText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 4)
     }
 
     private var lastSuccessText: String {
@@ -139,6 +140,10 @@ private struct JobRow: View {
         }
 
         return isStatusLoading ? "Refreshing status..." : "No recent errors"
+    }
+
+    private var errorColor: Color {
+        status?.hasRecentError == true ? .red : .secondary
     }
 
     private var statusIconName: String {
