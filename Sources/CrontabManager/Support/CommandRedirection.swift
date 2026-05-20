@@ -5,6 +5,21 @@ struct CommandRedirection: Equatable {
     var stdoutPath: String?
     var stderrPath: String?
     var stderrToStdout: Bool
+    var pipedLogPaths: [String]
+
+    init(
+        baseCommand: String,
+        stdoutPath: String?,
+        stderrPath: String?,
+        stderrToStdout: Bool,
+        pipedLogPaths: [String] = []
+    ) {
+        self.baseCommand = baseCommand
+        self.stdoutPath = stdoutPath
+        self.stderrPath = stderrPath
+        self.stderrToStdout = stderrToStdout
+        self.pipedLogPaths = pipedLogPaths
+    }
 
     var logPaths: [String] {
         var paths: [String] = []
@@ -14,6 +29,7 @@ struct CommandRedirection: Equatable {
         if !stderrToStdout, let stderrPath {
             paths.append(stderrPath)
         }
+        paths.append(contentsOf: pipedLogPaths)
         return Array(NSOrderedSet(array: paths)) as? [String] ?? paths
     }
 
@@ -26,6 +42,7 @@ struct CommandRedirection: Equatable {
         var stdoutPath: String?
         var stderrPath: String?
         var stderrToStdout = false
+        var pipedLogPaths: [String] = []
         var removed = Set<Int>()
         var replacements: [Int: String] = [:]
 
@@ -41,7 +58,16 @@ struct CommandRedirection: Equatable {
             let token = tokens[index].text
             let tokenParts = ShellSyntaxParts(token)
 
+            if tokenParts.core == "tee" {
+                pipedLogPaths.append(contentsOf: teeLogPaths(after: index, tokens: tokens))
+                continue
+            }
+
             if tokenParts.core == "2>&1" {
+                if nextTokenCore(after: index, tokens: tokens) == "|" {
+                    continue
+                }
+
                 stderrToStdout = true
                 markRemoved(index, replacement: tokenParts.wrapperText)
                 continue
@@ -111,7 +137,8 @@ struct CommandRedirection: Equatable {
             baseCommand: normalizeWrapperSpacing(keptTokens.joined(separator: " ")),
             stdoutPath: stdoutPath,
             stderrPath: stderrPath,
-            stderrToStdout: stderrToStdout
+            stderrToStdout: stderrToStdout,
+            pipedLogPaths: pipedLogPaths
         )
     }
 
@@ -137,6 +164,45 @@ struct CommandRedirection: Equatable {
             return String(token.dropFirst(prefix.count))
         }
         return nil
+    }
+
+    private static func teeLogPaths(after teeIndex: Int, tokens: [ShellToken]) -> [String] {
+        var paths: [String] = []
+        var index = teeIndex + 1
+
+        while tokens.indices.contains(index) {
+            let token = ShellSyntaxParts(tokens[index].text).core
+            if ["|", "&&", "||", ";"].contains(token) {
+                break
+            }
+
+            if token == "--" {
+                index += 1
+                continue
+            }
+
+            if token.hasPrefix("-") {
+                index += teeOptionConsumesFollowingValue(token) ? 2 : 1
+                continue
+            }
+
+            paths.append(token)
+            index += 1
+        }
+
+        return paths
+    }
+
+    private static func teeOptionConsumesFollowingValue(_ token: String) -> Bool {
+        let optionName = token.split(separator: "=", maxSplits: 1).first.map(String.init) ?? token
+        guard optionName == "--output-error" else { return false }
+        return !token.contains("=")
+    }
+
+    private static func nextTokenCore(after index: Int, tokens: [ShellToken]) -> String? {
+        let nextIndex = index + 1
+        guard tokens.indices.contains(nextIndex) else { return nil }
+        return ShellSyntaxParts(tokens[nextIndex].text).core
     }
 
     private static func normalizeWrapperSpacing(_ command: String) -> String {

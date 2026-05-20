@@ -35,9 +35,10 @@ The intended name should be the most useful stable label for the work being run:
 - Include meaningful positional arguments when they identify the job: `/opt/example/bin/sync tenant-a` becomes `sync tenant-a`.
 - Ignore setup commands such as `source`, `.`, `export`, and `set` when a later command performs the actual job.
 - Unwrap simple shell inline commands such as `bash -lc '/opt/example/bin/report daily'`.
+- Unwrap common cron launch wrappers when deriving a display name, while keeping the wrapper in the runnable command. Supported wrappers include `flock`, `timeout`, `nice`, `sudo`, `run-one`, `chronic`, `cronic`, `lockrun`, `daemonize`, `envdir`, `s6-setuidgid`, `docker exec`, `docker compose run`, and `kubectl exec`.
 - Strip cron log redirection before deriving the name.
 
-Known useful future improvements include unwrapping wrapper commands such as `flock`, `timeout`, `nice`, `sudo`, `chronic`, `cronic`, `run-one`, `docker exec`, `docker compose run`, `kubectl exec`, `envdir`, and similar launch helpers.
+Known useful future improvements include interpreting full shell control flow, remote command wrappers, dynamic log path variables, and process substitution.
 
 ## Commands
 
@@ -85,19 +86,21 @@ Supported forms include:
 - Quoted paths such as `>> '/var/log/example/job output.log'`
 - Combined stdout and stderr such as `>> file 2>&1`
 - Split stdout and stderr such as `1>> out.log 2>> err.log`
+- `tee` pipelines such as `command 2>&1 | tee -a file`, where the pipeline remains part of the runnable command and the `tee` target is added as a log file.
 
 When stdout and stderr point at separate files, the expected order is stdout first, then stderr. When stderr is redirected to stdout, only the stdout file should appear once.
 
 Known log extraction gaps include:
 
-- `tee` and `tee -a` pipelines.
 - Redirection inside quoted shell commands.
 - Process substitution such as `> >(logger -t example)`.
+- Syslog-only sinks such as `logger -t name`.
+- Dynamic shell variables or command substitutions in log paths when the app would need to evaluate shell code to resolve the final file.
 - Wrapper-specific log flags that are not shell redirection.
 
 ## Corpus Fixture
 
-`Tests/CrontabManagerTests/Fixtures/generic-crontab-1000.cron` contains 1000 synthetic jobs. The examples are generated from generic cron patterns and generic paths such as `/opt/example`, `/srv/example`, `/var/log/example`, and `~/Library/Logs/example`.
+`Tests/CrontabManagerTests/Fixtures/generic-crontab-1000.cron` contains 1000 synthetic jobs. The examples are generated from generic cron patterns and generic paths such as `/opt/example`, `/srv/example`, `/var/log/example`, and `~/Library/Logs/example`. The current corpus keeps 900 strict passing examples and 100 tracked gaps.
 
 Each row ends with test-only metadata:
 
@@ -111,5 +114,7 @@ Emoji status meanings:
 
 - `✅`: the current parser is expected to produce the documented `name`, `command`, and `logfiles`.
 - `❌`: the row documents an intended behavior that is currently a known parser gap. These rows stay in the fixture so improvements can flip them to `✅` when they start passing.
+
+The tracked gap rows currently emphasize harder moderate parsing cases: nested shell scripts with internal redirection, process substitution, syslog pipes, shell control flow, remote commands, `find -exec` and `xargs` inner commands, background jobs, transient service wrappers, dynamic log variables, command substitution in log paths, and advanced file-descriptor choreography.
 
 The corpus must remain generic. Do not add real user job names, private paths, local usernames, production hostnames, tokens, or organization-specific commands.

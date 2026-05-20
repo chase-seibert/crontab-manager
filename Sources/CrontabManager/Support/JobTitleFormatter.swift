@@ -63,6 +63,11 @@ enum JobTitleFormatter {
             return title(forBaseCommand: nestedCommand, workingDirectory: workingDirectory)
         }
 
+        if let wrappedTokens = wrappedCommandTokens(tokens, commandName: commandName),
+           let title = titleForExecutable(wrappedTokens, workingDirectory: workingDirectory) {
+            return title
+        }
+
         if commandName == "make" || commandName == "gmake" {
             return makeTitle(tokens: tokens, workingDirectory: workingDirectory)
         }
@@ -118,7 +123,7 @@ enum JobTitleFormatter {
         var segments: [[ShellToken]] = [[]]
 
         for token in ShellLexer.tokenize(command) {
-            if token.text == "&&" || token.text == ";" || token.text == "||" {
+            if token.text == "&&" || token.text == ";" || token.text == "||" || token.text == "|" {
                 if segments.last?.isEmpty == false {
                     segments.append([])
                 }
@@ -170,6 +175,10 @@ enum JobTitleFormatter {
                 continue
             }
 
+            if isShellSyntaxArgument(argument) {
+                continue
+            }
+
             if argument == "-C" || argument == "-f" || argument == "--file" || argument == "--directory" {
                 skipNext = true
                 continue
@@ -207,6 +216,10 @@ enum JobTitleFormatter {
                 continue
             }
 
+            if isShellSyntaxArgument(argument) {
+                continue
+            }
+
             if argument.hasPrefix("--") {
                 if !argument.contains("=") {
                     skipNext = true
@@ -234,6 +247,166 @@ enum JobTitleFormatter {
         }
 
         return hints
+    }
+
+    private static func wrappedCommandTokens(_ tokens: [String], commandName: String) -> [String]? {
+        switch commandName {
+        case "flock":
+            return flockCommandTokens(tokens)
+        case "timeout", "gtimeout":
+            return timeoutCommandTokens(tokens)
+        case "nice", "ionice":
+            return optionWrapperCommandTokens(tokens, valueOptions: ["-n", "--adjustment", "-c", "--class"])
+        case "sudo", "doas":
+            return sudoCommandTokens(tokens)
+        case "run-one", "chronic", "cronic":
+            return Array(tokens.dropFirst()).nilIfEmpty
+        case "lockrun":
+            return optionWrapperCommandTokens(tokens, valueOptions: ["--lockfile", "-l", "--retries", "-r", "--wait", "-w"])
+        case "daemonize":
+            return optionWrapperCommandTokens(tokens, valueOptions: ["-c", "-p", "-u", "-e", "-o", "-l"])
+        case "envdir":
+            guard tokens.count >= 3 else { return nil }
+            return Array(tokens.dropFirst(2))
+        case "s6-setuidgid":
+            guard tokens.count >= 3 else { return nil }
+            return Array(tokens.dropFirst(2))
+        case "docker":
+            return dockerCommandTokens(tokens)
+        case "kubectl":
+            return kubectlCommandTokens(tokens)
+        default:
+            return nil
+        }
+    }
+
+    private static func flockCommandTokens(_ tokens: [String]) -> [String]? {
+        var index = skipOptions(in: tokens, startingAt: 1, valueOptions: [
+            "-E", "--conflict-exit-code",
+            "-w", "-W", "--wait", "--timeout"
+        ])
+        guard tokens.indices.contains(index) else { return nil }
+
+        index += 1
+        guard tokens.indices.contains(index) else { return nil }
+        return Array(tokens.dropFirst(index))
+    }
+
+    private static func timeoutCommandTokens(_ tokens: [String]) -> [String]? {
+        var index = skipOptions(in: tokens, startingAt: 1, valueOptions: [
+            "-k", "--kill-after",
+            "-s", "--signal"
+        ])
+        guard tokens.indices.contains(index) else { return nil }
+
+        index += 1
+        guard tokens.indices.contains(index) else { return nil }
+        return Array(tokens.dropFirst(index))
+    }
+
+    private static func sudoCommandTokens(_ tokens: [String]) -> [String]? {
+        let index = skipOptions(in: tokens, startingAt: 1, valueOptions: [
+            "-u", "--user",
+            "-g", "--group",
+            "-h", "--host",
+            "-p", "--prompt",
+            "-C", "--close-from",
+            "-T", "--command-timeout",
+            "-D", "--chdir",
+            "-R", "--chroot",
+            "-t", "--type",
+            "-r", "--role"
+        ])
+        return stripEnvironmentPrefix(Array(tokens.dropFirst(index))).nilIfEmpty
+    }
+
+    private static func optionWrapperCommandTokens(_ tokens: [String], valueOptions: Set<String>) -> [String]? {
+        let index = skipOptions(in: tokens, startingAt: 1, valueOptions: valueOptions)
+        return Array(tokens.dropFirst(index)).nilIfEmpty
+    }
+
+    private static func dockerCommandTokens(_ tokens: [String]) -> [String]? {
+        guard tokens.indices.contains(1) else { return nil }
+
+        if tokens[1] == "exec" {
+            var index = skipOptions(in: tokens, startingAt: 2, valueOptions: [
+                "-e", "--env",
+                "--env-file",
+                "-u", "--user",
+                "-w", "--workdir"
+            ])
+            guard tokens.indices.contains(index) else { return nil }
+
+            index += 1
+            return Array(tokens.dropFirst(index)).nilIfEmpty
+        }
+
+        if tokens[1] == "compose", let runIndex = tokens.firstIndex(of: "run") {
+            var index = skipOptions(in: tokens, startingAt: runIndex + 1, valueOptions: [
+                "-e", "--env",
+                "--env-file",
+                "-u", "--user",
+                "-w", "--workdir",
+                "--entrypoint",
+                "--name",
+                "-v", "--volume",
+                "-l", "--label"
+            ])
+            guard tokens.indices.contains(index) else { return nil }
+
+            index += 1
+            return Array(tokens.dropFirst(index)).nilIfEmpty
+        }
+
+        return nil
+    }
+
+    private static func kubectlCommandTokens(_ tokens: [String]) -> [String]? {
+        guard let execIndex = tokens.firstIndex(of: "exec") else { return nil }
+
+        if let separatorIndex = tokens[execIndex...].firstIndex(of: "--") {
+            return Array(tokens.dropFirst(separatorIndex + 1)).nilIfEmpty
+        }
+
+        var index = skipOptions(in: tokens, startingAt: execIndex + 1, valueOptions: [
+            "-c", "--container",
+            "-n", "--namespace",
+            "--context",
+            "--as"
+        ])
+        guard tokens.indices.contains(index) else { return nil }
+
+        index += 1
+        return Array(tokens.dropFirst(index)).nilIfEmpty
+    }
+
+    private static func skipOptions(in tokens: [String], startingAt startIndex: Int, valueOptions: Set<String>) -> Int {
+        var index = startIndex
+
+        while tokens.indices.contains(index) {
+            let token = tokens[index]
+
+            if token == "--" {
+                index += 1
+                break
+            }
+
+            guard token.hasPrefix("-"), token != "-" else {
+                break
+            }
+
+            index += optionConsumesFollowingValue(token, valueOptions: valueOptions) ? 2 : 1
+        }
+
+        return index
+    }
+
+    private static func optionConsumesFollowingValue(_ token: String, valueOptions: Set<String>) -> Bool {
+        let optionName = token.split(separator: "=", maxSplits: 1).first.map(String.init) ?? token
+        guard valueOptions.contains(optionName) else { return false }
+        if token.contains("=") { return false }
+        if optionName.count == 2, token.count > 2 { return false }
+        return true
     }
 
     private static func joinedTitle(_ base: String, hints: [String]) -> String {
@@ -349,5 +522,21 @@ enum JobTitleFormatter {
         let name = token[..<equalsIndex]
         guard let first = name.first, first == "_" || first.isLetter else { return false }
         return name.allSatisfy { $0 == "_" || $0.isLetter || $0.isNumber }
+    }
+
+    private static func isShellSyntaxArgument(_ token: String) -> Bool {
+        token == "|" ||
+            token == "&" ||
+            token == "2>&1" ||
+            token == "1>&2" ||
+            token.hasPrefix(">") ||
+            token.hasPrefix("1>") ||
+            token.hasPrefix("2>")
+    }
+}
+
+private extension Array {
+    var nilIfEmpty: [Element]? {
+        isEmpty ? nil : self
     }
 }

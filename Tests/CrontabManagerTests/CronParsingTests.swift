@@ -82,6 +82,47 @@ final class CronParsingTests: XCTestCase {
         )
     }
 
+    func testJobTitlesUnwrapCommonCronWrappers() throws {
+        XCTAssertEqual(
+            JobTitleFormatter.title(for: "flock -n /tmp/example.lock /usr/bin/python3 /opt/example/scripts/reconcile.py tenant-a >> /tmp/reconcile.log 2>&1"),
+            "reconcile.py tenant-a"
+        )
+
+        XCTAssertEqual(
+            JobTitleFormatter.title(for: "timeout 300 /opt/example/bin/export-report finance >> /tmp/export.log 2>&1"),
+            "export-report finance"
+        )
+
+        XCTAssertEqual(
+            JobTitleFormatter.title(for: "sudo -u example /opt/example/bin/rotate-secret production >> /tmp/secret.log 2>&1"),
+            "rotate-secret production"
+        )
+
+        XCTAssertEqual(
+            JobTitleFormatter.title(for: "/usr/bin/docker exec app /usr/bin/python3 /srv/app/tasks/task.py daily >> /tmp/task.log 2>&1"),
+            "task.py daily"
+        )
+
+        XCTAssertEqual(
+            JobTitleFormatter.title(for: "/usr/local/bin/kubectl exec deployment/app -- /opt/example/bin/reindex search >> /tmp/reindex.log 2>&1"),
+            "reindex search"
+        )
+    }
+
+    func testCommandRedirectionFindsTeeLogsWithoutChangingPipeline() throws {
+        let parsed = CommandRedirection.parse("/opt/example/bin/stream-errors service-a 2>&1 | tee -a /var/log/example/combined.log")
+
+        XCTAssertEqual(parsed.baseCommand, "/opt/example/bin/stream-errors service-a 2>&1 | tee -a /var/log/example/combined.log")
+        XCTAssertNil(parsed.stdoutPath)
+        XCTAssertNil(parsed.stderrPath)
+        XCTAssertFalse(parsed.stderrToStdout)
+        XCTAssertEqual(parsed.logPaths, ["/var/log/example/combined.log"])
+        XCTAssertEqual(
+            JobTitleFormatter.title(for: "/opt/example/bin/stream-errors service-a 2>&1 | tee -a /var/log/example/combined.log"),
+            "stream-errors service-a"
+        )
+    }
+
     func testTerminalRunCommandStripsCronLogRedirection() throws {
         let job = try XCTUnwrap(CronJob.parse(
             rawLine: "0 * * * * (cd /Users/example/projects/rsscombine && make run file=new-york-times.env >> /tmp/cron.log 2>&1)",
