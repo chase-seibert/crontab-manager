@@ -22,6 +22,7 @@ let package = Package(
             name: "CrontabManagerTests",
             dependencies: ["CrontabManager"],
             path: "Tests/CrontabManagerTests",
+            exclude: ["Fixtures"],
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]

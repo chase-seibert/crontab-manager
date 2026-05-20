@@ -66,6 +66,8 @@ The parser preserves blank lines, comments, environment assignments, unsupported
 
 Log state comes from redirection in the command, such as `>> path 2>&1`. The app reads log tails to infer recent errors and successful runs; it does not write a separate status file.
 
+The parser behavior and generic corpus fixture are documented in [docs/crontab-format.md](docs/crontab-format.md).
+
 ## Source Layout
 
 - `Sources/CrontabManager/App`: app entry point.
