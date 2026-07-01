@@ -64,6 +64,15 @@ struct LogFileRow: View {
                         .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
                 }
 
+            Button {
+                copyLogFilePath()
+            } label: {
+                Label("Copy Log File Path", systemImage: "doc.on.doc")
+            }
+            .labelStyle(.iconOnly)
+            .controlSize(.small)
+            .help("Copy log file path")
+
             Button(role: .destructive) {
                 isConfirmingClear = true
             } label: {
@@ -135,6 +144,12 @@ struct LogFileRow: View {
                 }
             }
         )
+    }
+
+    private func copyLogFilePath() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(resolvedPath, forType: .string)
     }
 
     private func clearLogFile() {
