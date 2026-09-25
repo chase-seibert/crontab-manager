@@ -15,6 +15,13 @@ APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 APP_ICON="$ROOT_DIR/Resources/AppIcon.icns"
+TEAM_ID="${DEVELOPMENT_TEAM:-96NAC4VTEN}"
+SIGNING_MODE="${SIGNING_MODE:-team}"
+SIGN_IDENTITY="${CODE_SIGN_IDENTITY:-}"
+
+if [[ "$SIGNING_MODE" == "team" && -z "$SIGN_IDENTITY" ]]; then
+  SIGN_IDENTITY="$(/usr/bin/security find-identity -v -p codesigning 2>/dev/null | awk -F '"' '/Apple Development/ { print $2; exit }')"
+fi
 
 cd "$ROOT_DIR"
 
@@ -54,6 +61,33 @@ cat >"$INFO_PLIST" <<PLIST
 </dict>
 </plist>
 PLIST
+
+case "$SIGNING_MODE" in
+  team)
+    if [[ -z "$SIGN_IDENTITY" ]]; then
+      echo "No Apple Development signing identity found for team $TEAM_ID." >&2
+      exit 1
+    fi
+    /usr/bin/codesign --force --sign "$SIGN_IDENTITY" "$APP_BUNDLE" >/dev/null
+    actual_team="$(/usr/bin/codesign -dvvv "$APP_BUNDLE" 2>&1 | awk -F= '/^TeamIdentifier=/{print $2}')"
+    if [[ "$actual_team" != "$TEAM_ID" ]]; then
+      echo "Expected TeamIdentifier=$TEAM_ID, got ${actual_team:-none}." >&2
+      exit 1
+    fi
+    /usr/bin/codesign --verify --strict "$APP_BUNDLE" >/dev/null
+    ;;
+  adhoc)
+    /usr/bin/codesign --force --sign - "$APP_BUNDLE" >/dev/null
+    /usr/bin/codesign --verify --strict "$APP_BUNDLE" >/dev/null
+    ;;
+  unsigned)
+    echo "Skipping code signing (SIGNING_MODE=unsigned)."
+    ;;
+  *)
+    echo "Unsupported SIGNING_MODE=$SIGNING_MODE; use team, adhoc, or unsigned." >&2
+    exit 2
+    ;;
+esac
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

@@ -32,6 +32,12 @@ swift test
 ./script/build_and_run.sh --verify
 ```
 
+The launch script defaults to the local team-backed Apple Development
+identity. Contributors can use `SIGNING_MODE=unsigned ./script/build_and_run.sh`
+or `SIGNING_MODE=adhoc ./script/build_and_run.sh` without having an Apple
+Developer team. A different team can override `DEVELOPMENT_TEAM` and
+`CODE_SIGN_IDENTITY`.
+
 For normal local launch:
 
 ```sh
